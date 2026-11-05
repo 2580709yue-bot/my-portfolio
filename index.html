@@ -1,0 +1,2745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人作品集 - 视觉设计师</title>
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入现代无衬线字体 Inter 及结尾页斜体衬线字体 Cormorant Garamond -->
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- 引入路径变形库 Flubber -->
+  <script src="https://cdn.jsdelivr.net/npm/flubber@0.4.2/build/flubber.min.js"></script>
+  <!-- 引入 GSAP 及 ScrollTrigger 动效引擎 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  <!-- 引入 PDF.js 渲染引擎（主源 + 国内友好备用源自动切换） -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"
+          onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';"></script>
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background-color: #ffffff;
+      color: #000;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      overflow: hidden; /* 开场阶段锁死滚动 */
+    }
+
+    /* 滚动总轨道：全页唯一产生滚动高度的轨道，到底即停，绝无多余空白 */
+    .scroll-track {
+      height: 2150vh;
+      width: 100vw;
+      position: relative;
+    }
+
+    /* 固定视口容器：原生 fixed 锁定全屏 */
+    .sticky-viewport {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      z-index: 10;
+      background-color: #ffffff;
+    }
+
+    /* ==========================================================
+       全局鼠标跟随小球（惯性阻尼跟随 + 黑白智能切换）
+       ========================================================== */
+    #cursor-follower-ball {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background-color: #ffffff;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0;
+      transform: translate3d(-100px, -100px, 0);
+      transition: background-color 0.28s ease, width 0.25s ease, height 0.25s ease, opacity 0.3s ease;
+      will-change: transform, background-color;
+    }
+
+    /* 底层全屏视频层 */
+    #video-container {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      z-index: 5;
+      will-change: opacity, visibility;
+    }
+
+    #static-bg-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    .video-overlay {
+      position: absolute;
+      inset: 0;
+      background-color: transparent;
+      z-index: 1;
+    }
+
+    /* 全屏 SVG 动态镂空幕布 */
+    #curtain-svg {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+    }
+
+    /* 首屏文字入场动画初始状态 */
+    .animate-text {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .animate-text.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #main-content {
+      position: absolute;
+      inset: 0;
+      z-index: 25;
+      opacity: 0;
+      pointer-events: auto;
+    }
+
+    /* 单行传送带系统 (Conveyor Track) */
+    #conveyor-track {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      display: flex;
+      align-items: center;
+      z-index: 30;
+      pointer-events: none;
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      will-change: transform, opacity;
+    }
+
+    .custom-blue-text {
+      color: #097af4;
+      font-size: clamp(4.2rem, 9.2vw, 10.5rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.0;
+      white-space: nowrap;
+      margin: 0;
+      flex-shrink: 0;
+    }
+
+    /* 顶栏独立全屏容器：纯透明底，支持颜色主题动态切换（蓝 / 黑） */
+    #works-header-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 60;
+      pointer-events: none;
+      background: transparent;
+      color: #097af4;
+      opacity: 0;
+      transform: translateY(-45px);
+      transition: color 0.3s ease;
+      will-change: transform, opacity, color;
+    }
+
+    /* 目录卡片专属容器：严格锁定 595 : 761 比例 */
+    .card-ratio-box {
+      position: relative;
+      aspect-ratio: 595 / 761;
+      height: min(63vh, calc(25.5vw * 761 / 595));
+      width: calc(min(63vh, calc(25.5vw * 761 / 595)) * 595 / 761);
+      min-width: 0;
+      white-space: normal;
+      border-radius: 26px;
+      overflow: hidden;
+      box-shadow: 0 20px 45px rgba(9, 122, 244, 0.10), 0 4px 12px rgba(0,0,0,0.04);
+      border: 1px solid rgba(186, 222, 255, 0.65);
+      background: linear-gradient(180deg, #cbe6ff 0%, #edf6ff 28%, #ffffff 62%, #ffffff 100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+      flex-shrink: 0;
+    }
+    .card-ratio-box:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 26px 50px rgba(9, 122, 244, 0.16), 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    /* ==========================================================
+       第一板块：电商作品展示区
+       ========================================================== */
+    #ecommerce-section {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 40;
+      pointer-events: none;
+      visibility: hidden;
+      opacity: 0;
+      overflow: hidden;
+    }
+
+    .phone-mockup-wrapper {
+      position: relative;
+      aspect-ratio: 493 / 1000;
+      height: clamp(380px, 69.2vh, 720px);
+      width: auto;
+      user-select: none;
+      will-change: transform;
+    }
+
+    #phone-screen-mask {
+      position: absolute;
+      top: 1.65%;
+      bottom: 1.65%;
+      left: 3.65%;
+      right: 3.65%;
+      border-radius: 12.6% / 5.8%;
+      overflow: hidden;
+      z-index: 10;
+      background-color: #f3effb;
+    }
+
+    #phone-long-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      will-change: transform;
+      transform: translateY(0);
+    }
+
+    .phone-frame-overlay {
+      position: relative;
+      z-index: 20;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+    }
+
+    .experience-blue-card {
+      background-color: #097af4;
+      border-radius: clamp(16px, 1.8vw, 24px);
+      color: #ffffff;
+      box-shadow: none;
+      will-change: transform;
+    }
+
+    /* ==========================================================
+       第二板块：餐饮品牌设计展示区
+       ========================================================== */
+    #brand-section {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 45;
+      background-color: #ffffff;
+      pointer-events: none;
+      visibility: hidden;
+      overflow: hidden;
+      will-change: transform, opacity;
+    }
+
+    #brand-inner-wrapper {
+      width: 100%;
+      height: 100%;
+      transform-origin: center top;
+      will-change: transform, opacity;
+    }
+
+    /* ==========================================================
+       第三板块：作品墙（留白分隔栏 + 三列视差 + 卡片独立上浮）
+       ========================================================== */
+    #brand-gallery-section {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 48;
+      pointer-events: none;
+      visibility: hidden;
+      overflow: hidden;
+      will-change: transform;
+    }
+
+    #gallery-lead-bar {
+      width: 100%;
+      padding: 0 2.3vw 1.6vw 2.3vw;
+      will-change: transform;
+    }
+
+    #bento-grid-container {
+      width: 100%;
+      padding: 0 2.3vw;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.6vw;
+      align-items: start;
+    }
+
+    .bento-col {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 1.6vw;
+      min-width: 0;
+      will-change: transform;
+    }
+
+    .bento-card {
+      position: relative;
+      width: 100%;
+      height: auto;
+      min-height: 140px;
+      border-radius: clamp(18px, 1.8vw, 26px);
+      overflow: hidden;
+      background-color: #f6f5f2;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(0, 0, 0, 0.04);
+      cursor: pointer;
+      pointer-events: auto;
+      transform-origin: center bottom;
+      transition: box-shadow 0.4s ease;
+      will-change: transform, opacity;
+      display: block;
+      text-decoration: none;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .bento-card:hover {
+      box-shadow: 0 26px 52px rgba(0, 0, 0, 0.14), 0 6px 16px rgba(0, 0, 0, 0.06);
+    }
+
+    .bento-card img.card-main-img,
+    .bento-card canvas.pdf-cover-canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .bento-card:hover img.card-main-img,
+    .bento-card:hover canvas.pdf-cover-canvas {
+      transform: scale(1.035);
+    }
+
+    .bento-card video.card-hover-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background-color: #0e0e10;
+      display: block;
+    }
+
+    .bento-card-caption {
+      position: absolute;
+      inset: 0;
+      z-index: 15;
+      background: linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.72) 100%);
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 1.25rem 1.4rem;
+      color: #ffffff;
+    }
+
+    .bento-card:hover .bento-card-caption {
+      opacity: 1;
+    }
+
+    .bento-badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 20;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .badge-video {
+      background-color: rgba(20, 20, 22, 0.78);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    }
+
+    .badge-pdf {
+      background-color: rgba(29, 26, 22, 0.88);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .badge-img {
+      background-color: rgba(255, 255, 255, 0.92);
+      color: #1d1a16;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+
+    /* ==========================================================
+       第四板块：结尾页
+       【抗锯齿关键】不设置 will-change: transform，杜绝浏览器将小 viewBox 矢量图缓存为低清位图
+       ========================================================== */
+    #ending-section {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 52;
+      background-color: transparent;
+      pointer-events: none;
+      visibility: hidden;
+      overflow: hidden;
+    }
+
+    .contact-script-font {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-style: italic;
+      font-weight: 600;
+    }
+
+    /* ==========================================================
+       居中小窗口预览弹窗 + 背景毛玻璃模糊 + PDF全页高清连读
+       ========================================================== */
+    #media-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background-color: rgba(18, 18, 22, 0.42);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    #media-modal.active {
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    #modal-window {
+      position: relative;
+      background: #ffffff;
+      border-radius: 24px;
+      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      will-change: transform, opacity, width, height;
+      transform-origin: center center;
+    }
+
+    .modal-size-pdf {
+      width: min(76vw, 960px);
+      height: min(86vh, 840px);
+      min-width: 340px;
+      transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-size-pdf-portrait {
+      width: min(56vw, 600px);
+      height: min(88vh, 860px);
+      min-width: 340px;
+    }
+
+    .modal-size-video {
+      width: min(52vw, 560px);
+      height: min(82vh, 780px);
+      min-width: 320px;
+      background: #111113 !important;
+    }
+
+    .modal-size-image {
+      width: min(66vw, 820px);
+      height: min(84vh, 800px);
+      min-width: 320px;
+    }
+
+    .pdf-pages-scroll-container {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px 20px;
+      background: #f2f0eb;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      scroll-behavior: smooth;
+    }
+
+    .pdf-pages-scroll-container::-webkit-scrollbar {
+      width: 7px;
+    }
+    .pdf-pages-scroll-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .pdf-pages-scroll-container::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.22);
+      border-radius: 999px;
+    }
+
+    .pdf-page-canvas {
+      width: auto;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      flex-shrink: 0;
+      display: block;
+      border-radius: 10px;
+      background: #ffffff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+  
+  /* MOBILE_ADAPT_START */
+    @media (max-width: 768px) {
+      #cursor-follower-ball {
+        display: none !important;
+      }
+
+      #main-content > div {
+        padding: 20px 18px 28px 18px !important;
+      }
+      #main-content h1 {
+        font-size: clamp(2rem, 8.5vw, 2.6rem) !important;
+        line-height: 1.15 !important;
+        padding-top: 2.5rem !important;
+      }
+
+      .custom-blue-text {
+        font-size: clamp(2.6rem, 11vw, 3.6rem) !important;
+      }
+
+      #cards-conveyor-group {
+        gap: 2.2vw !important;
+      }
+      .card-ratio-box {
+        width: 29.2vw !important;
+        height: calc(29.2vw * 761 / 595) !important;
+        border-radius: 14px !important;
+      }
+      .card-ratio-box > img {
+        border-radius: 14px !important;
+      }
+      .card-ratio-box > div {
+        padding: 8px !important;
+        transform: scale(0.48);
+        transform-origin: top center;
+      }
+
+      #ecom-left-col {
+        left: 4vw !important;
+        right: 4vw !important;
+        top: 7.5vh !important;
+        bottom: auto !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+      }
+      #ecom-left-col h2 {
+        font-size: 1.35rem !important;
+      }
+      #ecom-left-col p {
+        font-size: 0.9rem !important;
+        margin-top: 4px !important;
+      }
+      #ecom-left-col img {
+        width: 24vw !important;
+        min-width: 85px !important;
+      }
+      #ecom-phone-col {
+        top: 41% !important;
+      }
+      .phone-mockup-wrapper {
+        height: clamp(240px, 43vh, 360px) !important;
+      }
+      #ecom-right-col {
+        left: 4vw !important;
+        right: 4vw !important;
+        top: auto !important;
+        bottom: 2.2vh !important;
+        width: 92vw !important;
+        min-width: 0 !important;
+        height: auto !important;
+      }
+      .experience-blue-card {
+        padding: 14px 16px !important;
+        border-radius: 16px !important;
+      }
+      .experience-blue-card h3 {
+        font-size: 0.95rem !important;
+        margin-bottom: 6px !important;
+      }
+      .experience-blue-card > div:nth-child(2) {
+        font-size: 0.82rem !important;
+        margin-bottom: 4px !important;
+      }
+      .experience-blue-card .whitespace-nowrap {
+        white-space: normal !important;
+        font-size: 0.68rem !important;
+        line-height: 1.55 !important;
+      }
+
+      #brand-inner-wrapper > div:nth-child(1) {
+        left: 4.5vw !important;
+        top: 8.5vh !important;
+      }
+      #brand-inner-wrapper > div:nth-child(1) h2 {
+        font-size: 1.55rem !important;
+      }
+      #brand-inner-wrapper > div:nth-child(1) p {
+        font-size: 0.95rem !important;
+        margin-top: 4px !important;
+      }
+      #brand-inner-wrapper > div:nth-child(2) {
+        left: 4.5vw !important;
+        right: 4.5vw !important;
+        top: 21vh !important;
+        width: 91vw !important;
+        min-width: 0 !important;
+      }
+      #brand-inner-wrapper > div:nth-child(2) h3 {
+        font-size: 0.95rem !important;
+        margin-bottom: 6px !important;
+      }
+      #brand-inner-wrapper > div:nth-child(2) .whitespace-nowrap {
+        white-space: normal !important;
+        font-size: 0.68rem !important;
+        line-height: 1.6 !important;
+      }
+      #brand-inner-wrapper > div:nth-child(3) {
+        left: auto !important;
+        right: 4.5vw !important;
+        top: 9.2vh !important;
+        bottom: auto !important;
+      }
+      #brand-inner-wrapper > div:nth-child(3) img {
+        width: 25vw !important;
+        min-width: 90px !important;
+      }
+      #brand-inner-wrapper > div:nth-child(4) {
+        left: 4.5vw !important;
+        right: 4.5vw !important;
+        bottom: 3vh !important;
+        width: 91vw !important;
+        height: 44vh !important;
+        border-radius: 16px !important;
+      }
+
+      #gallery-lead-bar {
+        padding: 0 3vw 2vw 3vw !important;
+      }
+      #bento-grid-container {
+        padding: 0 3vw !important;
+        gap: 2vw !important;
+      }
+      .bento-col {
+        gap: 2vw !important;
+      }
+      .bento-card {
+        min-height: 60px !important;
+        border-radius: 12px !important;
+      }
+      .bento-badge {
+        top: 6px !important;
+        right: 6px !important;
+        padding: 2px 6px !important;
+        font-size: 9px !important;
+        gap: 3px !important;
+      }
+      .bento-badge svg {
+        width: 10px !important;
+        height: 10px !important;
+      }
+      .card-play-icon > div {
+        width: 30px !important;
+        height: 30px !important;
+      }
+      .card-play-icon svg {
+        width: 14px !important;
+        height: 14px !important;
+      }
+      .bento-card-caption {
+        display: none !important;
+      }
+
+      #ending-home-btn {
+        bottom: 8.8vh !important;
+      }
+
+      .modal-size-pdf,
+      .modal-size-pdf-portrait,
+      .modal-size-video,
+      .modal-size-image {
+        width: 92vw !important;
+        max-width: 92vw !important;
+        height: 80vh !important;
+        max-height: 80vh !important;
+        min-width: 0 !important;
+      }
+      .pdf-pages-scroll-container {
+        padding: 10px !important;
+      }
+    }
+/* MOBILE_ADAPT_END */
+  </style>
+</head>
+<body>
+
+<!-- 全局鼠标跟随小球 -->
+<div id="cursor-follower-ball"></div>
+
+<!-- 滚动轨道（全页唯一高度来源，到底即停） -->
+<div class="scroll-track"></div>
+
+<!-- 固定视口 -->
+<div class="sticky-viewport">
+
+  <!-- 1. 底层全屏背景视频 -->
+  <div id="video-container">
+    <video id="static-bg-video" autoplay muted loop playsinline>
+      <source src="video_0.mp4" type="video/mp4">
+      您的浏览器不支持视频标签。
+    </video>
+    <div class="video-overlay" id="video-overlay-layer"></div>
+  </div>
+
+  <!-- 2. 首屏主内容区（文字/邮箱/时钟） -->
+  <div id="main-content" class="w-full h-full overflow-hidden select-none">
+    <div class="relative w-full h-full px-[2.2vw] pt-[3.2vh] pb-[3.8vh] flex flex-col justify-between">
+      <!-- 顶部栏：左 Logo / 居中邮箱 / 右时间 -->
+      <div class="relative w-full flex justify-between items-center animate-text" data-delay="100">
+        <div class="flex items-center">
+          <img src="logo.svg" alt="Logo" class="w-[clamp(26px,1.9vw,34px)] h-auto object-contain">
+        </div>
+        <div class="hidden md:flex items-center gap-[0.55vw] text-white/95 absolute left-1/2 -translate-x-1/2"
+             style="font-size: clamp(0.85rem, 1.05vw, 1.15rem);">
+          <span class="w-[8px] h-[8px] rounded-full bg-white inline-block shrink-0"></span>
+          <span class="font-normal tracking-[0.02em]">2580709yue@gmail.com</span>
+        </div>
+        <div class="text-right">
+          <div id="real-time-clock" class="text-white/95 font-normal tracking-[0.02em]"
+               style="font-size: clamp(0.85rem, 1.05vw, 1.15rem);">--:-- -- BJT</div>
+        </div>
+      </div>
+
+      <!-- 中上部：左侧三行中文导语 + 右侧 {视觉设计师} -->
+      <div class="absolute left-[2.2vw] right-[2.2vw] top-[21.8vh] flex justify-between items-start pointer-events-none">
+        <div class="animate-text pointer-events-auto" data-delay="200">
+          <p class="text-white font-medium tracking-[0.03em] leading-[1.48]"
+             style="font-size: clamp(0.95rem, 1.18vw, 1.32rem);">
+            平面设计、品牌设计、视频创意。
+          </p>
+          <p class="text-white/80 font-light tracking-[0.02em] leading-[1.45] mt-[0.2vh]"
+             style="font-size: clamp(0.92rem, 1.14vw, 1.26rem);">
+            你把想法交给我吧，我会成为你的<br>合作伙伴。
+          </p>
+        </div>
+        <div class="hidden md:block text-right animate-text pointer-events-auto" data-delay="300">
+          <span class="text-white/95 font-normal tracking-[0.04em]"
+                style="font-size: clamp(0.95rem, 1.15vw, 1.28rem);">{视觉设计师}</span>
+        </div>
+      </div>
+
+      <!-- 左下英文主标题 + 底部栏 -->
+      <div class="w-full mt-auto">
+        <div class="animate-text mb-[4.2vh]" data-delay="260">
+          <h1 class="text-white font-medium tracking-[-0.015em] leading-[1.15]"
+              style="font-size: clamp(2.6rem, 4.85vw, 5.4rem);">
+            Let expression be<br>seen through designs<br>that stand out.
+          </h1>
+        </div>
+
+        <div class="w-full flex justify-between items-end animate-text" data-delay="400">
+          <a href="#about" class="text-white/90 hover:text-white transition font-light tracking-[0.04em] leading-none"
+             style="font-size: clamp(1.55rem, 2.5vw, 2.8rem);">
+            <span>走进我的创作世界</span>
+          </a>
+          <div class="flex items-center gap-2 text-white/95 font-normal tracking-[0.01em] pb-[0.3vh]"
+               style="font-size: clamp(0.85rem, 1.05vw, 1.15rem);">
+            <span class="w-3.5 h-3.5 rounded-full border border-white/90 flex items-center justify-center shrink-0">
+              <span class="w-2 h-2 rounded-full bg-white"></span>
+            </span>
+            <span>Scroll Down</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 全屏动态镂空 SVG 幕布 -->
+  <svg id="curtain-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <mask id="cutout-mask">
+        <rect width="1920" height="1080" fill="white" />
+        <g id="maskOrigin" transform="translate(960, 540)">
+          <g id="animGroup" transform="translate(0, 0) scale(1) rotate(0)">
+            <g transform="translate(-58.23, -29.98)">
+              <path id="morphPath" fill="black" />
+            </g>
+          </g>
+        </g>
+      </mask>
+    </defs>
+    <rect width="1920" height="1080" fill="white" mask="url(#cutout-mask)" />
+    <g id="coloredLogoGroup" transform="translate(960, 540)">
+      <g id="coloredAnimGroup" transform="translate(0, 0) scale(1) rotate(0)">
+        <g transform="translate(-58.23, -29.98)">
+          <path id="coloredMorphPath" fill="#097af4" opacity="0" />
+        </g>
+      </g>
+    </g>
+  </svg>
+
+  <!-- 4. 单轨传送系统：包含文案与紧随其后的三组作品目录卡片 -->
+  <div id="conveyor-track">
+    <div id="slogan-box" class="shrink-0 flex items-center pr-[10vw]">
+      <h2 class="custom-blue-text" id="blue-slogan">Designed for real life</h2>
+    </div>
+
+    <div id="cards-conveyor-group" class="shrink-0 flex items-center gap-6 md:gap-8 opacity-0 pointer-events-auto">
+      <!-- 卡片 1 -->
+      <div class="card-ratio-box">
+        <div class="absolute inset-0 p-5 md:p-6 lg:p-7 flex flex-col justify-between z-0">
+          <div>
+            <div class="w-6 h-6 rounded-full border border-[#097af4]/60 flex items-center justify-center text-[#097af4] text-xs font-semibold">1</div>
+            <h3 class="text-[#097af4] text-lg md:text-xl font-bold text-center mt-2 md:mt-3 leading-snug">E-Commerce<br>&amp; Long Details</h3>
+            <p class="text-[#097af4] text-lg md:text-xl font-bold text-center mt-2">{电商视觉}</p>
+            <div class="w-8 h-0.5 bg-[#097af4] mx-auto my-2 md:my-3 rounded-full"></div>
+            <p class="text-[#097af4] text-lg md:text-xl font-bold text-center">2023</p>
+          </div>
+          <p class="text-slate-500 text-[11px] md:text-xs font-normal leading-relaxed text-center mt-2">
+            E-commerce visual design and long-form image detail pages serve as a core bridge connecting brands and consumers.
+          </p>
+        </div>
+        <img src="card1.jpg" alt="E-Commerce & Long Details"
+             class="absolute inset-0 w-full h-full object-cover rounded-[24px] md:rounded-[26px] z-10"
+             onerror="this.onerror=null; this.src='card1.png'; this.onerror=function(){this.style.display='none';};">
+      </div>
+
+      <!-- 卡片 2 -->
+      <div class="card-ratio-box">
+        <div class="absolute inset-0 p-5 md:p-6 lg:p-7 flex flex-col justify-between z-0">
+          <div>
+            <div class="w-6 h-6 rounded-full border border-[#097af4]/60 flex items-center justify-center text-[#097af4] text-xs font-semibold">2</div>
+            <h3 class="text-[#097af4] text-lg md:text-xl font-bold text-center mt-2 md:mt-3 leading-snug">Culinary<br>&amp; Menus</h3>
+            <p class="text-[#097af4] text-lg md:text-xl font-bold text-center mt-2">{美食摄影<br>&amp;菜单设计}</p>
+            <div class="w-8 h-0.5 bg-[#097af4] mx-auto my-2 md:my-3 rounded-full"></div>
+            <p class="text-[#097af4] text-lg md:text-xl font-bold text-center">2024</p>
+          </div>
+          <p class="text-slate-500 text-[11px] md:text-xs font-normal leading-relaxed text-center mt-2">
+            Food photography and menu design are the first taste window for restaurant brands to connect emotionally with consumers.
+          </p>
+        </div>
+        <img src="card2.jpg" alt="Culinary & Menus"
+             class="absolute inset-0 w-full h-full object-cover rounded-[24px] md:rounded-[26px] z-10"
+             onerror="this.onerror=null; this.src='card2.png'; this.onerror=function(){this.style.display='none';};">
+      </div>
+
+      <!-- 卡片 3 -->
+      <div class="card-ratio-box">
+        <div class="absolute inset-0 p-5 md:p-6 lg:p-7 flex flex-col justify-between z-0">
+          <div>
+            <div class="w-6 h-6 rounded-full border border-[#097af4]/60 flex items-center justify-center text-[#097af4] text-xs font-semibold">3</div>
+            <h3 class="text-[#097af4] text-lg md:text-xl font-bold text-center mt-2 md:mt-3 leading-snug">Creative<br>Campaigns</h3>
+            <p class="text-[#097af4] text-lg md:text-xl font-bold text-center mt-2">{创意短片}</p>
+            <div class="w-8 h-0.5 bg-[#097af4] mx-auto my-2 md:my-3 rounded-full"></div>
+            <p class="text-[#097af4] text-lg md:text-xl font-bold text-center">2025</p>
+          </div>
+          <p class="text-slate-500 text-[11px] md:text-xs font-normal leading-relaxed text-center mt-2">
+            AI videos and creative shorts are radically reshaping modern commercial advertising and brand storytelling.
+          </p>
+        </div>
+        <img src="card3.jpg" alt="Creative Campaigns"
+             class="absolute inset-0 w-full h-full object-cover rounded-[24px] md:rounded-[26px] z-10"
+             onerror="this.onerror=null; this.src='card3.png'; this.onerror=function(){this.style.display='none';};">
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 第一板块：电商详情展示模块 -->
+  <div id="ecommerce-section">
+    <div class="relative w-full h-full">
+      <div id="ecom-left-col"
+           class="absolute left-[2.3vw] top-[8.8vh] bottom-[4.8vh] flex flex-col justify-between z-20 pointer-events-auto">
+        <div>
+          <h2 class="text-[#097af4] font-bold tracking-[0.01em] leading-[1.06] whitespace-nowrap"
+              style="font-size: clamp(2.2rem, 4.3vw, 4.7rem);">
+            E-Commerce<br>&amp; Long Details
+          </h2>
+          <p class="text-[#097af4] font-semibold mt-[1.6vh] tracking-[0.04em]"
+             style="font-size: clamp(1.25rem, 2.15vw, 2.35rem);">
+            电商作品
+          </p>
+        </div>
+        <div>
+          <img src="JOYFACE.logo.png" alt="JOYFACE 觉飞"
+               class="w-[16.2vw] min-w-[130px] max-w-[230px] h-auto object-contain select-none block"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+          <span class="hidden text-[#097af4] text-xl md:text-2xl font-bold tracking-wider">JOYFACE 觉飞</span>
+        </div>
+      </div>
+
+      <div id="ecom-phone-col"
+           class="absolute left-1/2 top-[53.5%] z-30 pointer-events-auto"
+           style="transform: translate3d(calc(-50% - 65vw), -50%, 0);">
+        <div class="phone-mockup-wrapper">
+          <div id="phone-screen-mask">
+            <img id="phone-long-img" src="详情页.jpg" alt="电商详情页长图">
+          </div>
+          <img src="手机轮廓.png" alt="手机外壳" class="phone-frame-overlay">
+        </div>
+      </div>
+
+      <div id="ecom-right-col"
+           class="absolute right-[1.5vw] top-[8.8vh] bottom-[4.8vh] w-[32.4vw] min-w-[310px] z-20 pointer-events-auto"
+           style="transform: translate3d(45vw, 0, 0);">
+        <div class="experience-blue-card w-full h-full px-[2.3vw] pt-[4.5vh] pb-[4vh] flex flex-col justify-start overflow-hidden"
+             data-cursor-white="true">
+          <h3 class="text-white font-medium tracking-[0.03em] mb-[2.6vh] leading-tight"
+              style="font-size: clamp(1.15rem, 1.85vw, 1.85rem);">
+            工作经历
+          </h3>
+          <div class="text-white font-medium tracking-[0.02em] mb-[0.7vh] leading-snug"
+               style="font-size: clamp(0.88rem, 1.25vw, 1.25rem);">
+            JOYFACE 觉飞
+          </div>
+          <div class="text-white/95 font-normal leading-[1.82] tracking-[0.01em] whitespace-nowrap"
+               style="font-size: clamp(0.7rem, 0.96vw, 0.98rem);">
+            <p>电商设计师（甲方） 2023.6—2023.12</p>
+            <p>承接电商设计执行与物料支持：</p>
+            <p>承接三大电商平台主图、详情页设计及活动素材迭代，</p>
+            <p>按运营节奏完成上新与页面维护；</p>
+            <p>配合直播间物料制作与修改，跟进开播前后素材交付；</p>
+            <p>协助产品拍摄现场执行、画面整理及后期衔接；</p>
+            <p>支持公司日常物料设计，按brief完成品牌延展，</p>
+            <p>保障调性统一与交付时效；</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 第二板块：餐饮品牌设计展示模块 -->
+  <div id="brand-section">
+    <div id="brand-inner-wrapper" class="relative w-full h-full pointer-events-auto">
+      <div class="absolute left-[2.3vw] top-[15.5vh] z-20">
+        <h2 class="text-[#1d1a16] font-bold tracking-[-0.01em] leading-[1.05] whitespace-nowrap"
+            style="font-size: clamp(2.1rem, 4.15vw, 4.5rem);">
+          Restaurant<br>Brand Designer
+        </h2>
+        <p class="text-[#1d1a16] font-semibold mt-[1.8vh] tracking-[0.03em]"
+           style="font-size: clamp(1.2rem, 2.05vw, 2.25rem);">
+          餐饮品牌设计
+        </p>
+      </div>
+
+      <div class="absolute left-[2.3vw] w-[33.2vw] min-w-[300px] top-[45.8vh] z-20">
+        <h3 class="text-[#1d1a16] font-medium tracking-[0.03em] leading-tight mb-[1.2vh]"
+            style="font-size: clamp(1.1rem, 1.75vw, 1.85rem);">
+          工作经历
+        </h3>
+        <div class="w-full flex justify-between items-end">
+          <div class="text-[#1d1a16] font-medium text-center leading-[1.08] tracking-wide select-none pb-[0.3vh]"
+               style="font-size: clamp(0.66rem, 0.85vw, 0.9rem);">
+            <div>2024</div>
+            <div>/</div>
+            <div>2026</div>
+          </div>
+          <div class="text-right text-[#1d1a16]">
+            <div class="font-medium tracking-[0.02em] mb-[0.5vh] leading-snug"
+                 style="font-size: clamp(0.85rem, 1.15vw, 1.22rem);">
+              GOODWOOD
+            </div>
+            <div class="text-[#1d1a16]/90 font-normal leading-[1.9] tracking-[0.01em] whitespace-nowrap"
+                 style="font-size: clamp(0.64rem, 0.85vw, 0.9rem);">
+              <p>良木缘咖啡西餐 | 甲方设计师</p>
+              <p>（平面/摄影/视频支持） | 2024—2026</p>
+              <p>在品牌视觉规范与项目排期下，承接多品牌设计执行</p>
+              <p>与内容制作支持：承接 Good Grains、画厨、良木缘</p>
+              <p>的日常物料与季节菜单设计，按品牌调性完成视觉延展</p>
+              <p>保障多品牌输出一致性；参与产品拍摄执行与画面整理</p>
+              <p>配合视频创意构思、素材筛选及后期衔接，支持门店与</p>
+              <p>线上宣传内容产出</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="absolute left-[2.3vw] bottom-[6.2vh] z-20">
+        <img src="good wood logo.png" alt="良木缘 goodwood"
+             class="w-[16.6vw] min-w-[130px] max-w-[240px] h-auto object-contain select-none block"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <span class="hidden text-[#1d1a16] text-xl md:text-2xl font-extrabold tracking-tight">良木缘 goodwood</span>
+      </div>
+
+      <div class="absolute right-0 bottom-0 w-[60.2vw] h-[72.8vh] z-10 overflow-hidden">
+        <img src="品牌设计页配图.jpg" alt="GOODWOOD Brand Design"
+             class="w-full h-full object-cover object-center select-none block">
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. 第三板块：留白过渡 + 三列差速视差作品墙（共 34 件作品） -->
+  <div id="brand-gallery-section">
+    <!-- 顶部极简水平分割栏 -->
+    <div id="gallery-lead-bar">
+      <div class="w-full flex items-center justify-between gap-4 pt-3 pb-2 border-t border-black/10 text-[11px] md:text-xs font-semibold tracking-[0.12em] uppercase text-[#1d1a16]">
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+          <span>WORKS SHOWCASE</span>
+        </div>
+        <div class="flex items-center gap-2.5 shrink-0">
+          <span>GOODWOOD &amp; HUACHU</span>
+          <span class="w-6 h-6 rounded-md bg-[#1d1a16] text-white flex items-center justify-center">
+            <svg width="13" height="7" viewBox="0 0 116.459 59.953">
+              <polygon points="0 0 0 24.471 41.647 59.953 55.07 50.267 58.212 48 25.271 0 0 0" fill="currentColor"/>
+              <polygon points="91.189 0 58.248 48 61.389 50.267 74.812 59.953 116.459 24.471 116.459 0 91.189 0" fill="currentColor"/>
+              <path d="M58.193,36.401L78.756.786c.18-.311-.105-.685-.453-.593l-20.22,5.296L38.086.196c-.348-.092-.634.282-.454.593l20.561,35.612Z" fill="currentColor"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 三列作品网格 -->
+    <div id="bento-grid-container">
+      <!-- 左列 (Column 1 - 11件) -->
+      <div id="bento-col-1" class="bento-col"></div>
+      <!-- 中间列 (Column 2 - 12件) -->
+      <div id="bento-col-2" class="bento-col"></div>
+      <!-- 右列 (Column 3 - 11件) -->
+      <div id="bento-col-3" class="bento-col"></div>
+    </div>
+  </div>
+
+  <!-- 8. 第四板块：页面结尾页（滑到结尾页即停 + 纯矢量无锯齿 Logo 从无到有放大并变形为 Logo + 下方文案出现） -->
+  <div id="ending-section">
+    <div class="relative w-full h-full pointer-events-auto select-none">
+
+      <!-- 左上角：{王革 \n 视觉设计师} -->
+      <div class="absolute left-[1.6vw] top-[4.2vh] text-[#111111] font-bold leading-[1.35] tracking-[0.02em]"
+           style="font-size: clamp(0.95rem, 1.32vw, 1.45rem);">
+        <div>{王革</div>
+        <div class="pl-[1.5em]">视觉设计师}</div>
+      </div>
+
+      <!-- 右上角：Designed \n for real life -->
+      <div class="absolute right-[1.6vw] top-[4.0vh] text-[#111111] font-normal text-right leading-[1.02] tracking-[-0.02em]"
+           style="font-size: clamp(1.4rem, 2.25vw, 2.5rem);">
+        <div>Designed</div>
+        <div>for real life</div>
+      </div>
+
+      <!-- 屏幕正中央：与开场动画同构的纯矢量变形 Logo（零位图缓存、零锯齿）+ 期待加入 →你们 -->
+      <div class="absolute left-1/2 top-[54.5%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+        <svg id="ending-logo-svg"
+             class="w-[10.8vw] min-w-[115px] max-w-[175px] h-auto overflow-visible"
+             viewBox="0 0 116.459 59.953"
+             shape-rendering="geometricPrecision">
+          <g transform="translate(58.23, 29.98)">
+            <g id="ending-anim-group" transform="scale(0)">
+              <g transform="translate(-58.23, -29.98)">
+                <path id="ending-morph-path" fill="#000000" opacity="0" shape-rendering="geometricPrecision" />
+              </g>
+            </g>
+          </g>
+        </svg>
+
+        <!-- 期待加入 \n →你们 -->
+        <div id="ending-join-text" class="mt-[5.4vh] text-[#111111] font-medium leading-[1.35] tracking-[0.03em] opacity-0"
+             style="font-size: clamp(1.05rem, 1.45vw, 1.55rem);">
+          <div>期待加入</div>
+          <div class="pl-[2em]">→你们</div>
+        </div>
+      </div>
+
+      <!-- 左下角：Contact us + ● 2580709yue@gmail.com -->
+      <div class="absolute left-[1.6vw] bottom-[3.0vh] text-[#111111]">
+        <div class="contact-script-font text-[#111111]/90 leading-none mb-1.5"
+             style="font-size: clamp(0.95rem, 1.2vw, 1.3rem);">
+          Contact us
+        </div>
+        <a href="mailto:2580709yue@gmail.com"
+           class="flex items-center gap-2 text-[#111111] hover:opacity-70 transition font-normal tracking-[0.01em]"
+           style="font-size: clamp(0.85rem, 1.12vw, 1.22rem);">
+          <span class="w-2.5 h-2.5 rounded-full bg-[#111111] inline-block shrink-0"></span>
+          <span>2580709yue@gmail.com</span>
+        </a>
+      </div>
+
+      <!-- 底部居中：◉ Back to Home（点击平滑返回整个页面首页） -->
+      <button id="ending-home-btn" type="button"
+              class="absolute left-1/2 -translate-x-1/2 bottom-[3.0vh] flex items-center gap-2 text-[#111111] hover:opacity-70 active:scale-95 transition cursor-pointer focus:outline-none font-medium"
+              style="font-size: clamp(0.85rem, 1.05vw, 1.12rem);">
+        <span class="w-3.5 h-3.5 rounded-full border border-[#111111] flex items-center justify-center shrink-0">
+          <span class="w-2 h-2 rounded-full bg-[#111111]"></span>
+        </span>
+        <span>Back to Home</span>
+      </button>
+
+      <!-- 右下角：2026 -->
+      <div class="absolute right-[1.6vw] bottom-[3.0vh] text-[#111111] font-medium"
+           style="font-size: clamp(0.82rem, 0.98vw, 1.05rem);">
+        2026
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 9. 顶栏独立全屏容器 -->
+  <div id="works-header-container" class="w-full flex justify-center py-3.5">
+    <div id="works-header-inner" class="relative w-full flex justify-between items-center transition-all duration-300">
+      <div class="text-sm md:text-base font-bold leading-snug select-none text-left">
+        <div id="works-header-toptext">{作品</div>
+        <div id="works-header-subtext" class="pl-2">目录}</div>
+      </div>
+
+      <button id="header-home-btn" type="button" title="返回首页"
+              class="absolute left-1/2 -translate-x-1/2 flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-200 focus:outline-none">
+        <svg width="44" height="23" viewBox="0 0 116.459 59.953">
+          <polygon points="0 0 0 24.471 41.647 59.953 55.07 50.267 58.212 48 25.271 0 0 0" fill="currentColor"/>
+          <polygon points="91.189 0 58.248 48 61.389 50.267 74.812 59.953 116.459 24.471 116.459 0 91.189 0" fill="currentColor"/>
+          <path d="M58.193,36.401L78.756.786c.18-.311-.105-.685-.453-.593l-20.22,5.296L38.086.196c-.348-.092-.634.282-.454.593l20.561,35.612Z" fill="currentColor"/>
+        </svg>
+      </button>
+
+      <div id="works-clock" class="text-sm md:text-base font-semibold select-none text-right">--:-- -- BJT</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 10. 【丝滑居中小窗口预览弹窗 + 背景毛玻璃模糊 + 阻断滚轮穿透】 -->
+<div id="media-modal" onclick="closeMediaModal()" onwheel="event.stopPropagation()">
+  <div id="modal-window" class="modal-size-pdf" onclick="event.stopPropagation()">
+    <!-- 小窗口极简顶部栏 -->
+    <div id="modal-header-bar" class="w-full flex justify-between items-center px-5 py-3.5 border-b border-black/5 bg-white/95 backdrop-blur-md z-20 shrink-0">
+      <div class="flex items-center gap-2.5">
+        <span id="modal-type-dot" class="w-2.5 h-2.5 rounded-full bg-[#1d1a16]"></span>
+        <span id="modal-title" class="text-sm md:text-base font-semibold text-[#1d1a16] tracking-wide">作品预览</span>
+        <span id="modal-page-hint" class="hidden text-xs text-neutral-400 font-normal ml-2">向下滚动翻阅全册</span>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <a id="modal-newtab-btn" href="#" target="_blank"
+           class="hidden text-xs font-medium text-[#1d1a16]/70 hover:text-[#1d1a16] bg-black/5 hover:bg-black/10 px-3 py-1.5 rounded-full transition">
+          新窗口打开原文件 ↗
+        </a>
+        <button type="button" onclick="closeMediaModal()" title="关闭预览 (Esc)"
+                class="w-7 h-7 rounded-full bg-black/5 hover:bg-black/15 flex items-center justify-center text-[#1d1a16] text-lg leading-none cursor-pointer transition">
+          &times;
+        </button>
+      </div>
+    </div>
+
+    <!-- 小窗口核心内容承载区 -->
+    <div id="modal-body" class="w-full flex-1 relative overflow-hidden flex items-center justify-center bg-[#f2f0eb]">
+      <!-- 动态插入 PDF 多页高清画布 / 本地 MP4 视频播放器 / 高清完整海报 -->
+    </div>
+  </div>
+</div>
+
+<!-- 动效与数据渲染核心脚本 -->
+<script>
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+  window.scrollTo(0, 0);
+
+  // 配置 PDF.js Worker（使用同源 Blob Worker 避免跨域 Worker 路径解析与安全拦截问题）
+  const PDFJS_CDN_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174';
+  const PDFJS_CMAP_URL = `${PDFJS_CDN_BASE}/cmaps/`;
+  const PDFJS_FONT_URL = `${PDFJS_CDN_BASE}/standard_fonts/`;
+
+  function setupPdfJsWorker() {
+    if (!window.pdfjsLib) return;
+    const workerUrl = `${PDFJS_CDN_BASE}/build/pdf.worker.min.js`;
+    try {
+      const blob = new Blob([`importScripts("${workerUrl}");`], { type: 'application/javascript' });
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+    } catch (e) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+    }
+  }
+  setupPdfJsWorker();
+
+  // =========================================================================
+  // 【全局鼠标跟随小球系统】阻尼跟随 + 黑白智能切换
+  // =========================================================================
+  const followerBall = document.getElementById('cursor-follower-ball');
+  let ballQuickX = null;
+  let ballQuickY = null;
+  let isPageOnHeroVideo = true;
+  let isHoveringDarkElement = false;
+
+  if (followerBall && window.gsap) {
+    ballQuickX = gsap.quickTo(followerBall, 'x', { duration: 0.32, ease: 'power3.out' });
+    ballQuickY = gsap.quickTo(followerBall, 'y', { duration: 0.32, ease: 'power3.out' });
+
+    window.addEventListener('mousemove', (e) => {
+      if (followerBall.style.opacity !== '1') {
+        followerBall.style.opacity = '1';
+      }
+      ballQuickX(e.clientX + 6);
+      ballQuickY(e.clientY + 6);
+
+      const target = e.target;
+      if (target && target.closest) {
+        isHoveringDarkElement = Boolean(
+          target.closest('[data-cursor-white="true"]') ||
+          target.closest('#media-modal.active')
+        );
+      } else {
+        isHoveringDarkElement = false;
+      }
+      syncFollowerBallColor();
+    });
+
+    document.addEventListener('mouseleave', () => {
+      followerBall.style.opacity = '0';
+    });
+  }
+
+  function syncFollowerBallColor() {
+    if (!followerBall) return;
+    const shouldBeWhite = isPageOnHeroVideo || isHoveringDarkElement;
+    followerBall.style.backgroundColor = shouldBeWhite ? '#ffffff' : '#141414';
+  }
+
+  // 多候选路径生成器：兼容空格、不间断空格 (\u00a0) 及目录层级
+  function buildCandidatePaths(fileVariants) {
+    const dirs = ['作品展示/', 'my-portfolio/作品展示/'];
+    const expandedVariants = [];
+    fileVariants.forEach(f => {
+      if (!expandedVariants.includes(f)) expandedVariants.push(f);
+      const nbspVariant = f.replace(/ /g, '\u00a0');
+      if (!expandedVariants.includes(nbspVariant)) expandedVariants.push(nbspVariant);
+      const noSpaceVariant = f.replace(/\s+\./g, '.');
+      if (!expandedVariants.includes(noSpaceVariant)) expandedVariants.push(noSpaceVariant);
+    });
+
+    const result = [];
+    dirs.forEach(d => {
+      expandedVariants.forEach(f => {
+        result.push(d + f);
+      });
+    });
+    return result;
+  }
+
+  // 将相对路径安全转换为编码后的完整绝对 URL
+  function toEncodedAbsoluteUrl(rawPath) {
+    const encodedPath = rawPath
+      .split('/')
+      .map(seg => encodeURIComponent(seg))
+      .join('/');
+    return new URL(encodedPath, window.location.href).href;
+  }
+
+  // 异步探测列表中第一个真实存在的有效文件路径
+  async function findWorkingUrl(candidates) {
+    if (window.location.protocol === 'file:') {
+      return candidates[0];
+    }
+    for (const url of candidates) {
+      try {
+        const encodedUrl = toEncodedAbsoluteUrl(url);
+        const res = await fetch(encodedUrl, { method: 'HEAD' });
+        if (res.ok) return url;
+      } catch (e) {}
+    }
+    return candidates[0];
+  }
+
+  // 稳健加载 PDF 文档对象：支持 Illustrator 压缩流、CID 中文字库及 ArrayBuffer 兜底
+  const pdfDocCache = new Map();
+  async function loadPdfDocumentSafely(rawUrl) {
+    if (pdfDocCache.has(rawUrl)) {
+      return pdfDocCache.get(rawUrl);
+    }
+
+    const absUrl = toEncodedAbsoluteUrl(rawUrl);
+    const baseParams = {
+      cMapUrl: PDFJS_CMAP_URL,
+      cMapPacked: true,
+      standardFontDataUrl: PDFJS_FONT_URL,
+      isEvalSupported: false
+    };
+
+    const loadPromise = (async () => {
+      try {
+        return await window.pdfjsLib.getDocument({
+          ...baseParams,
+          url: absUrl
+        }).promise;
+      } catch (firstErr) {
+        const response = await fetch(absUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const buffer = await response.arrayBuffer();
+        return await window.pdfjsLib.getDocument({
+          ...baseParams,
+          data: buffer
+        }).promise;
+      }
+    })();
+
+    pdfDocCache.set(rawUrl, loadPromise);
+    try {
+      return await loadPromise;
+    } catch (err) {
+      pdfDocCache.delete(rawUrl);
+      throw err;
+    }
+  }
+
+  // 当 img 加载失败时，自动依次尝试候选列表中的下一个路径
+  function tryNextImageCandidate(imgEl) {
+    if (!imgEl || !imgEl.dataset.candidates) return;
+    const list = JSON.parse(imgEl.dataset.candidates);
+    let idx = parseInt(imgEl.dataset.idx || '0', 10) + 1;
+    if (idx < list.length) {
+      imgEl.dataset.idx = String(idx);
+      imgEl.src = list[idx];
+    }
+  }
+
+  // 当 video 加载失败时，自动依次尝试候选列表中的下一个路径
+  function tryNextVideoCandidate(videoEl) {
+    if (!videoEl || !videoEl.dataset.candidates) return;
+    const list = JSON.parse(videoEl.dataset.candidates);
+    let idx = parseInt(videoEl.dataset.idx || '0', 10) + 1;
+    if (idx < list.length) {
+      videoEl.dataset.idx = String(idx);
+      videoEl.src = list[idx];
+      videoEl.load();
+      if (videoEl.dataset.autoplayNow === '1') {
+        videoEl.play().catch(() => {});
+      }
+    }
+  }
+
+  // =========================================================================
+  // 【34件作品全量配置】
+  // =========================================================================
+  const bentoColumnsData = [
+    // ==================== 左列 (Column 1 - 11件) ====================
+    [
+      {
+        type: 'image',
+        files: ['餐卡&餐垫纸.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '520火焰巧恋',
+        covers: ['520火焰巧恋.png', '520 火焰巧恋.png', '520火焰巧恋 .png'],
+        videos: ['520火焰巧恋.mp4', '520火焰巧恋 mp4', '520火焰巧恋 mp4.mp4', '520 火焰巧恋.mp4', '520火焰巧恋 .mp4']
+      },
+      {
+        type: 'image',
+        files: ['海报1.jpg', '海报 1.jpg', '海报1.png'],
+        label: '宣传海报'
+      },
+      {
+        type: 'pdf',
+        files: ['LMY儿童节套餐菜单.pdf', 'LMY 儿童节套餐菜单.pdf'],
+        label: '儿童节菜单',
+        cropBleed: 0
+      },
+      {
+        type: 'image',
+        files: ['画厨夏季kt板.jpg', '画厨夏季 kt 板.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '菌香果韵鸡腿扒',
+        covers: [
+          '菌香菌香果韵鸡腿扒 .png',
+          '菌香菌香果韵鸡腿扒.png',
+          '菌香果韵鸡腿扒 .png',
+          '菌香果韵鸡腿扒.png',
+          '茴香果韵鸡腿扒 .png'
+        ],
+        videos: [
+          '菌香菌香果韵鸡腿扒 .mp4',
+          '菌香菌香果韵鸡腿扒.mp4',
+          '菌香果韵鸡腿扒 .mp4',
+          '菌香果韵鸡腿扒.mp4',
+          '茴香果韵鸡腿扒 .mp4'
+        ]
+      },
+      {
+        type: 'image',
+        files: ['画厨新春1.jpg', '画厨新春 1.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '良木缘自家烘焙面包篮',
+        covers: ['良木缘自家烘焙面包篮.png', '良木缘自家烘焙面包篮 .png'],
+        videos: ['良木缘自家烘焙面包篮.mp4', '良木缘自家烘焙面包篮 .mp4']
+      },
+      {
+        type: 'image',
+        files: ['coffee1.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'image',
+        files: ['海报4.jpg', '海报 4.jpg', '海报4.png'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '心苹气和咖啡',
+        covers: ['心苹气和咖啡 .png', '心苹气和咖啡.png'],
+        videos: ['心苹气和咖啡 .mp4', '心苹气和咖啡.mp4']
+      }
+    ],
+
+    // ==================== 中间列 (Column 2 - 12件) ====================
+    [
+      {
+        type: 'video',
+        label: '草莓抹茶牛乳',
+        covers: ['草莓抹茶牛乳.png', '草莓抹茶牛乳 .png'],
+        videos: ['草莓抹茶牛乳.mp4', '草莓抹茶牛乳 .mp4']
+      },
+      {
+        type: 'image',
+        files: ['画厨儿童节kt.jpg', '画厨儿童节 kt.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'pdf',
+        files: ['LMY圣诞节菜单.pdf', 'LMY 圣诞节菜单.pdf'],
+        label: '圣诞节菜单',
+        cropBleed: 0.05
+      },
+      {
+        type: 'image',
+        files: ['海报2.jpg', '海报 2.jpg', '海报2.png'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '良木缘第29个夏天',
+        covers: ['良木缘第29个夏天..png', '良木缘第29个夏天.png', '良木缘第 29 个夏天..png', '良木缘第 29 个夏天.png'],
+        videos: ['良木缘第29个夏天.mp4', '良木缘第 29 个夏天.mp4', '良木缘第29个夏天 .mp4']
+      },
+      {
+        type: 'pdf',
+        files: ['画厨夏季菜单.pdf'],
+        label: '夏季菜单',
+        cropBleed: 0.045
+      },
+      {
+        type: 'image',
+        files: ['画厨夏季kt板2.jpg', '画厨夏季 kt 板 2.jpg', '画厨夏季kt板 2.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'pdf',
+        files: ['甜品套餐单.pdf'],
+        label: '甜品套餐菜单',
+        cropBleed: 0
+      },
+      {
+        type: 'image',
+        files: ['画厨新春2.jpg', '画厨新春 2.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '六一快乐',
+        covers: ['六一快乐 .png', '六一快乐.png'],
+        videos: ['六一快乐.mp4', '六一快乐 .mp4', '六一快乐 mp4', '六一快乐 mp4.mp4']
+      },
+      {
+        type: 'pdf',
+        files: ['LMY 菜单 (1).pdf', 'LMY菜单(1).pdf', 'LMY菜单 (1).pdf', 'LMY菜单.pdf'],
+        label: '品牌主菜单',
+        cropBleed: 0
+      },
+      {
+        type: 'image',
+        files: ['coffee2.jpg'],
+        label: '宣传海报'
+      }
+    ],
+
+    // ==================== 右列 (Column 3 - 11件) ====================
+    [
+      {
+        type: 'pdf',
+        files: ['画厨儿童节单页菜单.pdf'],
+        label: '儿童节单页菜单',
+        cropBleed: 0
+      },
+      {
+        type: 'image',
+        files: ['画厨夏季kt板4.jpg', '画厨夏季 kt 板 4.jpg', '画厨夏季kt板 4.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '地中海来信开启七夕蓝调时刻',
+        covers: ['地中海来信开启七夕蓝调时刻 .png', '地中海来信开启七夕蓝调时刻.png'],
+        videos: ['地中海来信开启七夕蓝调时刻 .mp4', '地中海来信开启七夕蓝调时刻.mp4']
+      },
+      {
+        type: 'image',
+        files: ['海报3.jpg', '海报 3.jpg', '海报3.png'],
+        label: '宣传海报'
+      },
+      {
+        type: 'image',
+        files: ['画厨新春3.jpg', '画厨新春 3.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'pdf',
+        files: ['LMY甜品菜单.pdf', 'LMY甜品菜单(1).pdf', 'LMY甜品菜单 (1).pdf', 'LMY 甜品菜单 (1).pdf'],
+        label: '甜品菜单',
+        cropBleed: 0
+      },
+      {
+        type: 'video',
+        label: '良木缘秋日披萨季',
+        covers: ['良木缘秋日披萨季.png', '良木缘秋日披萨季 .png'],
+        videos: ['良木缘秋日披萨季.mp4', '良木缘秋日披萨季 .mp4']
+      },
+      {
+        type: 'image',
+        files: ['coffee3.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: '轻榛子酸奶蛋糕',
+        covers: ['轻榛子酸奶蛋糕 .png', '轻榛子酸奶蛋糕.png'],
+        videos: ['轻榛子酸奶蛋糕.mp4', '轻榛子酸奶蛋糕 .mp4', '轻榛子酸奶蛋糕 mp4', '轻榛子酸奶蛋糕 mp4.mp4']
+      },
+      {
+        type: 'image',
+        files: ['coffee4.jpg'],
+        label: '宣传海报'
+      },
+      {
+        type: 'video',
+        label: 'Summer夏日上新',
+        covers: ['Summer夏日上.png', 'Summer 夏日上.png', 'Summer夏日上新.png', 'Summer 夏日上新.png'],
+        videos: ['Summer夏日上新.mp4', 'Summer 夏日上新.mp4', 'Summer夏日上.mp4']
+      }
+    ]
+  ];
+
+  // 构建单张卡片 HTML
+  function createBentoCardHTML(item, colIdx, rowIdx) {
+    if (item.type === 'image') {
+      const candidates = buildCandidatePaths(item.files);
+      const candidatesJson = JSON.stringify(candidates).replace(/"/g, '&quot;');
+      return `
+        <div class="bento-card" data-col="${colIdx}" data-row="${rowIdx}"
+             onclick="openCardModal(this, 'image', '${candidatesJson}', '${item.label}')">
+          <span class="bento-badge badge-img">${item.label}</span>
+          <img src="${candidates[0]}" alt="${item.label}"
+               class="card-main-img"
+               data-candidates="${candidatesJson}" data-idx="0"
+               onload="updateGalleryScroll()"
+               onerror="tryNextImageCandidate(this)">
+          <div class="bento-card-caption">
+            <div class="text-xs text-white/75 mb-1">点击小窗放大预览</div>
+            <div class="text-base md:text-lg font-bold tracking-wide">${item.label}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (item.type === 'pdf') {
+      const candidates = buildCandidatePaths(item.files);
+      const candidatesJson = JSON.stringify(candidates).replace(/"/g, '&quot;');
+      const bleed = item.cropBleed || 0;
+      return `
+        <div class="bento-card bg-[#1d1a16]" data-col="${colIdx}" data-row="${rowIdx}"
+             data-pdf-candidates="${candidatesJson}"
+             data-pdf-bleed="${bleed}"
+             onclick="openCardModal(this, 'pdf', '${candidatesJson}', '${item.label}', null, ${bleed})">
+          <span class="bento-badge badge-pdf">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            ${item.label}
+          </span>
+          <div class="pdf-card-fallback py-14 px-6 flex flex-col items-center justify-center text-center bg-gradient-to-br from-[#26231e] to-[#151310] text-[#e8e2d5]">
+            <div class="text-[11px] tracking-[0.25em] uppercase opacity-60 mb-2">GOODWOOD &amp; HUACHU MENU</div>
+            <div class="text-xl md:text-2xl font-bold tracking-wider mb-3">${item.label}</div>
+            <div class="text-xs px-3.5 py-1 rounded-full border border-[#e8e2d5]/30 opacity-80">点击展开小窗翻阅全册</div>
+          </div>
+          <canvas class="pdf-cover-canvas hidden"></canvas>
+          <div class="bento-card-caption">
+            <div class="text-xs text-white/80 mb-1">点击在屏幕中央展开小窗翻阅</div>
+            <div class="text-base md:text-lg font-bold tracking-wide">${item.label}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (item.type === 'video') {
+      const coverCandidates = buildCandidatePaths(item.covers);
+      const videoCandidates = buildCandidatePaths(item.videos);
+      const coverJson = JSON.stringify(coverCandidates).replace(/"/g, '&quot;');
+      const videoJson = JSON.stringify(videoCandidates).replace(/"/g, '&quot;');
+      return `
+        <div class="bento-card bg-[#141414]" data-col="${colIdx}" data-row="${rowIdx}"
+             onmouseenter="hoverPlayCardVideo(this, true)"
+             onmouseleave="hoverPlayCardVideo(this, false)"
+             onclick="openCardModal(this, 'video', '${videoJson}', '${item.label}', '${coverJson}')">
+          <span class="bento-badge badge-video">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            视频作品
+          </span>
+          <img src="${coverCandidates[0]}" alt="${item.label}"
+               class="card-main-img card-cover-img relative z-10 transition-opacity duration-300"
+               data-candidates="${coverJson}" data-idx="0"
+               onload="updateGalleryScroll()"
+               onerror="tryNextImageCandidate(this)">
+          <video src="${videoCandidates[0]}" muted loop playsinline preload="metadata"
+                 class="card-hover-video z-5 opacity-0 transition-opacity duration-300"
+                 data-candidates="${videoJson}" data-idx="0"
+                 onerror="tryNextVideoCandidate(this)"></video>
+          <div class="card-play-icon absolute inset-0 flex items-center justify-center pointer-events-none z-15 transition-transform duration-300">
+            <div class="w-13 h-13 md:w-14 md:h-14 rounded-full bg-black/45 backdrop-blur-md flex items-center justify-center text-white border border-white/35 shadow-lg">
+              <svg class="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+          </div>
+          <div class="bento-card-caption">
+            <div class="text-xs text-white/80 mb-1">点击展开小窗播放视频</div>
+            <div class="text-base md:text-lg font-bold tracking-wide">${item.label}</div>
+          </div>
+        </div>
+      `;
+    }
+    return '';
+  }
+
+  // 将 PDF 的指定页面渲染到 Canvas
+  async function renderPdfPageToCanvas(pdfDoc, pageNum, canvas, targetWidth, bleedRatio = 0) {
+    const page = await pdfDoc.getPage(pageNum);
+    const unscaledViewport = page.getViewport({ scale: 1 });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const scale = (targetWidth * dpr) / (unscaledViewport.width * (1 - bleedRatio * 2));
+    const viewport = page.getViewport({ scale });
+
+    const cropX = viewport.width * bleedRatio;
+    const cropY = viewport.height * bleedRatio;
+    const finalW = Math.round(viewport.width * (1 - bleedRatio * 2));
+    const finalH = Math.round(viewport.height * (1 - bleedRatio * 2));
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = Math.round(viewport.width);
+    offscreen.height = Math.round(viewport.height);
+    const offCtx = offscreen.getContext('2d');
+
+    await page.render({ canvasContext: offCtx, viewport }).promise;
+
+    canvas.width = finalW;
+    canvas.height = finalH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(offscreen, cropX, cropY, finalW, finalH, 0, 0, finalW, finalH);
+  }
+
+  // 单张 PDF 卡片封面渲染（带本地 file:// 或极端情况下的原生预览兜底）
+  async function renderSinglePdfCardCover(card) {
+    const candidates = JSON.parse(card.dataset.pdfCandidates);
+    const bleed = parseFloat(card.dataset.pdfBleed || '0');
+    const validUrl = await findWorkingUrl(candidates);
+    card.dataset.resolvedPdfUrl = validUrl;
+
+    const canvas = card.querySelector('.pdf-cover-canvas');
+    const fallback = card.querySelector('.pdf-card-fallback');
+
+    if (window.pdfjsLib && window.location.protocol !== 'file:') {
+      try {
+        setupPdfJsWorker();
+        const pdfDoc = await loadPdfDocumentSafely(validUrl);
+        if (canvas) {
+          await renderPdfPageToCanvas(pdfDoc, 1, canvas, 600, bleed);
+          canvas.classList.remove('hidden');
+          if (fallback) fallback.classList.add('hidden');
+          updateGalleryScroll();
+          return;
+        }
+      } catch (err) {
+        console.warn('PDF.js 卡片封面渲染回退:', validUrl, err);
+      }
+    }
+
+    if (fallback) {
+      const embedWrap = document.createElement('div');
+      embedWrap.className = 'w-full overflow-hidden relative bg-[#1d1a16] pointer-events-none';
+      embedWrap.style.aspectRatio = '3 / 4';
+      embedWrap.innerHTML = `<iframe src="${validUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH" class="w-full h-full border-0 pointer-events-none block" tabindex="-1"></iframe>`;
+      fallback.replaceWith(embedWrap);
+      setTimeout(() => updateGalleryScroll(), 300);
+    }
+  }
+
+  // 初始化卡片上的所有 PDF 首页高清封面渲染（按视觉从上到下排序并并行加载）
+  async function initPdfCardCovers() {
+    const pdfCards = Array.from(document.querySelectorAll('.bento-card[data-pdf-candidates]'));
+    pdfCards.sort((a, b) => {
+      const rowA = parseInt(a.dataset.row || '0', 10);
+      const rowB = parseInt(b.dataset.row || '0', 10);
+      return rowA - rowB;
+    });
+
+    await Promise.allSettled(pdfCards.map(card => renderSinglePdfCardCover(card)));
+  }
+
+  // =========================================================================
+  // Flubber 路径变形插值器（同时用于首屏幕布与结尾页矢量 Logo 变形）
+  // =========================================================================
+  const logoFullD = "M 0 0 L 0 24.471 L 41.647 59.953 L 55.07 50.267 L 58.212 48 L 25.271 0 Z M 91.189 0 L 58.248 48 L 61.389 50.267 L 74.812 59.953 L 116.459 24.471 L 116.459 0 Z M 58.193 36.401 L 78.756 0.786 C 78.936 0.475 78.651 0.101 78.303 0.193 L 58.083 5.489 L 37.864 0.193 C 37.516 0.101 37.231 0.475 37.411 0.786 L 57.974 36.401 Z";
+  const roundedRectPathD = "M 12 0 H 104.459 A 12 12 0 0 1 116.459 12 V 47.953 A 12 12 0 0 1 104.459 59.953 H 12 A 12 12 0 0 1 0 47.953 V 12 A 12 12 0 0 1 12 0 Z";
+
+  const pathElement = document.getElementById('morphPath');
+  const coloredPathElement = document.getElementById('coloredMorphPath');
+  const animGroup = document.getElementById('animGroup');
+  const coloredAnimGroup = document.getElementById('coloredAnimGroup');
+  const mainContent = document.getElementById('main-content');
+
+  const interpolator = flubber.interpolate(logoFullD, roundedRectPathD, { maxSegmentLength: 2 });
+  pathElement.setAttribute('d', logoFullD);
+  coloredPathElement.setAttribute('d', logoFullD);
+
+  // =========================================================================
+  // 【结尾页 Logo 丝滑放大变形 + 文案浮现系统（纯矢量无锯齿）】
+  // =========================================================================
+  const endingAnimGroup = document.getElementById('ending-anim-group');
+  const endingMorphPath = document.getElementById('ending-morph-path');
+  const endingJoinText = document.getElementById('ending-join-text');
+
+  const endingLogoState = {
+    scale: 0,
+    morph: 1,
+    opacity: 0
+  };
+  let endingLogoPlayed = false;
+  let endingLogoTl = null;
+
+  function renderEndingLogoVector() {
+    if (!endingAnimGroup || !endingMorphPath) return;
+
+    let pathD;
+    if (endingLogoState.morph <= 0.001) {
+      pathD = logoFullD;
+    } else if (endingLogoState.morph >= 0.999) {
+      pathD = roundedRectPathD;
+    } else {
+      const m = Math.max(0, Math.min(1, endingLogoState.morph));
+      pathD = interpolator(m);
+    }
+
+    endingMorphPath.setAttribute('d', pathD);
+    endingMorphPath.setAttribute('opacity', endingLogoState.opacity.toFixed(3));
+    endingAnimGroup.setAttribute('transform', `scale(${endingLogoState.scale.toFixed(4)})`);
+  }
+
+  function resetEndingLogoState() {
+    endingLogoPlayed = false;
+    if (endingLogoTl) {
+      endingLogoTl.kill();
+      endingLogoTl = null;
+    }
+    gsap.killTweensOf([endingLogoState, endingJoinText]);
+    endingLogoState.scale = 0;
+    endingLogoState.morph = 1;
+    endingLogoState.opacity = 0;
+    renderEndingLogoVector();
+    if (endingJoinText) {
+      gsap.set(endingJoinText, { y: 18, opacity: 0 });
+    }
+  }
+
+  function triggerEndingLogoGrowth() {
+    if (endingLogoPlayed) return;
+    endingLogoPlayed = true;
+
+    if (endingLogoTl) endingLogoTl.kill();
+    gsap.killTweensOf([endingLogoState, endingJoinText]);
+
+    endingLogoState.scale = 0;
+    endingLogoState.morph = 1;
+    endingLogoState.opacity = 0;
+    renderEndingLogoVector();
+    if (endingJoinText) {
+      gsap.set(endingJoinText, { y: 18, opacity: 0 });
+    }
+
+    endingLogoTl = gsap.timeline();
+
+    endingLogoTl.to(endingLogoState, {
+      scale: 1,
+      opacity: 1,
+      duration: 0.52,
+      ease: 'power3.out',
+      onUpdate: renderEndingLogoVector
+    }, 0)
+    .to(endingLogoState, {
+      morph: 0,
+      duration: 0.68,
+      ease: 'power2.inOut',
+      onUpdate: renderEndingLogoVector
+    }, 0.40)
+    .to(endingJoinText, {
+      y: 0,
+      opacity: 1,
+      duration: 0.65,
+      ease: 'power3.out'
+    }, 0.92);
+  }
+
+  resetEndingLogoState();
+
+  // =========================================================================
+  // 【核心引擎 1】确定性驱动第一板块（电商作品）两侧聚拢入场
+  // =========================================================================
+  const ecomState = { progress: 0 };
+
+  function updateEcommerceSection() {
+    const ecomSection = document.getElementById('ecommerce-section');
+    const leftCol = document.getElementById('ecom-left-col');
+    const phoneCol = document.getElementById('ecom-phone-col');
+    const rightCol = document.getElementById('ecom-right-col');
+    if (!ecomSection || !leftCol || !phoneCol || !rightCol) return;
+
+    const p = Math.max(0, Math.min(1, ecomState.progress));
+    const eased = 1 - Math.pow(1 - p, 2);
+
+    const leftX = (1 - eased) * -45;
+    leftCol.style.transform = `translate3d(${leftX.toFixed(2)}vw, 0, 0)`;
+    leftCol.style.opacity = eased.toFixed(3);
+
+    const phoneOffsetX = (1 - eased) * -65;
+    phoneCol.style.transform = `translate3d(calc(-50% + ${phoneOffsetX.toFixed(2)}vw), -50%, 0)`;
+
+    const rightX = (1 - eased) * 45;
+    rightCol.style.transform = `translate3d(${rightX.toFixed(2)}vw, 0, 0)`;
+  }
+
+  // =========================================================================
+  // 【核心引擎 2】作品墙与结尾页一体化无缝衔接滚动系统
+  // =========================================================================
+  let bentoCols = [];
+  let bentoColumnCardLists = [[], [], []];
+  const galleryScrollState = { progress: 0 };
+
+  function renderBentoGallery() {
+    bentoCols = [
+      document.getElementById('bento-col-1'),
+      document.getElementById('bento-col-2'),
+      document.getElementById('bento-col-3')
+    ];
+
+    bentoColumnsData.forEach((colItems, colIdx) => {
+      const colEl = bentoCols[colIdx];
+      if (colEl) {
+        colEl.innerHTML = colItems.map((item, rowIdx) => createBentoCardHTML(item, colIdx, rowIdx)).join('');
+        bentoColumnCardLists[colIdx] = Array.from(colEl.querySelectorAll('.bento-card'));
+      }
+    });
+
+    bentoColumnCardLists.forEach((cards) => {
+      cards.forEach((card) => {
+        gsap.set(card, { y: 120, scale: 0.91, opacity: 0 });
+        card.dataset.floated = '0';
+      });
+    });
+
+    initPdfCardCovers();
+  }
+
+  function updateGalleryScroll() {
+    if (!bentoCols.length) return;
+
+    const vh = window.innerHeight;
+    const p = Math.max(0, Math.min(1, galleryScrollState.progress));
+
+    const startY = vh * 1.28;
+
+    const leadBarEl = document.getElementById('gallery-lead-bar');
+    const leadBarHeight = leadBarEl ? leadBarEl.offsetHeight : 54;
+
+    const dockBottomY = vh * 0.94;
+    const endingStartY = vh * 0.96;
+
+    const middleColHeight = bentoCols[1] ? bentoCols[1].offsetHeight : 3600;
+    const middleDockTargetY = dockBottomY - (leadBarHeight + middleColHeight);
+
+    const travelA = Math.max(100, startY - middleDockTargetY);
+    const travelB = endingStartY;
+    const pSplit = travelA / (travelA + travelB);
+
+    let subP = 0;
+    let endU = 0;
+
+    if (p <= pSplit) {
+      subP = p / pSplit;
+      endU = 0;
+    } else {
+      subP = 1;
+      endU = (p - pSplit) / (1 - pSplit);
+    }
+
+    const pushUpOffset = endU * travelB;
+    const middleCurrentY = (startY + (middleDockTargetY - startY) * subP) - pushUpOffset;
+
+    const brandWrapper = document.getElementById('brand-inner-wrapper');
+    if (brandWrapper) {
+      const brandPushY = Math.min(0, middleCurrentY - startY);
+      brandWrapper.style.transform = `translate3d(0, ${brandPushY.toFixed(1)}px, 0)`;
+    }
+
+    if (leadBarEl) {
+      leadBarEl.style.transform = `translate3d(0, ${middleCurrentY.toFixed(1)}px, 0)`;
+    }
+
+    const colParallaxWave = Math.sin(subP * Math.PI);
+    const colParallaxOffsets = [-25, -75, 15];
+
+    for (let colIdx = 0; colIdx < 3; colIdx++) {
+      const colEl = bentoCols[colIdx];
+      if (!colEl) continue;
+
+      const colHeight = colEl.offsetHeight;
+      const colDockTargetY = dockBottomY - (leadBarHeight + colHeight);
+      const targetY = (startY + (colDockTargetY - startY) * subP + colParallaxWave * colParallaxOffsets[colIdx]) - pushUpOffset;
+
+      colEl.style.transform = `translate3d(0, ${targetY.toFixed(1)}px, 0)`;
+
+      const cards = bentoColumnCardLists[colIdx];
+      const colStaggerDelay = colIdx === 1 ? 0 : (colIdx === 0 ? 0.04 : 0.08);
+
+      for (let rowIdx = 0; rowIdx < cards.length; rowIdx++) {
+        const card = cards[rowIdx];
+        const cardNaturalTop = card.offsetTop;
+        const cardScreenTop = leadBarHeight + targetY + cardNaturalTop;
+
+        if (cardScreenTop <= vh * 0.96 || subP >= 0.96) {
+          if (card.dataset.floated !== '1') {
+            card.dataset.floated = '1';
+            gsap.to(card, {
+              y: 0,
+              scale: 1,
+              opacity: 1,
+              duration: 0.85,
+              delay: colStaggerDelay,
+              ease: 'expo.out',
+              overwrite: 'auto'
+            });
+          }
+        } else if (cardScreenTop > vh * 1.03 && subP < 0.95) {
+          if (card.dataset.floated !== '0') {
+            card.dataset.floated = '0';
+            gsap.set(card, {
+              y: 120,
+              scale: 0.91,
+              opacity: 0,
+              overwrite: 'auto'
+            });
+          }
+        }
+      }
+    }
+
+    const endingSection = document.getElementById('ending-section');
+    if (endingSection) {
+      if (endU > 0.001) {
+        endingSection.style.visibility = 'visible';
+        const endingY = endingStartY - pushUpOffset;
+        if (endingY <= 0.5) {
+          endingSection.style.transform = 'none';
+        } else {
+          endingSection.style.transform = `translateY(${endingY.toFixed(1)}px)`;
+        }
+
+        if (endU >= 0.72) {
+          triggerEndingLogoGrowth();
+        } else if (endU < 0.25 && endingLogoPlayed) {
+          resetEndingLogoState();
+        }
+      } else {
+        endingSection.style.visibility = 'hidden';
+        endingSection.style.transform = `translateY(${vh}px)`;
+        if (endingLogoPlayed) {
+          resetEndingLogoState();
+        }
+      }
+    }
+  }
+
+  renderBentoGallery();
+
+  function hoverPlayCardVideo(cardEl, isEnter) {
+    const vid = cardEl.querySelector('.card-hover-video');
+    const img = cardEl.querySelector('.card-cover-img');
+    if (!vid) return;
+    if (isEnter) {
+      vid.dataset.autoplayNow = '1';
+      vid.style.opacity = '1';
+      if (img) img.style.opacity = '0';
+      vid.play().catch(() => {});
+    } else {
+      vid.dataset.autoplayNow = '0';
+      vid.pause();
+      vid.style.opacity = '0';
+      if (img) img.style.opacity = '1';
+    }
+  }
+
+  // =========================================================================
+  // 点击卡片后从卡片位置丝滑展开至屏幕中央小窗口 + PDF全册高清连续预览
+  // =========================================================================
+  let lastClickedCardRect = null;
+  let currentModalRenderToken = 0;
+
+  async function openCardModal(cardEl, type, candidatesJsonStr, title, coverJsonStr, bleedRatio = 0) {
+    const modal = document.getElementById('media-modal');
+    const modalWin = document.getElementById('modal-window');
+    const modalBody = document.getElementById('modal-body');
+    const modalTitle = document.getElementById('modal-title');
+    const modalHeaderBar = document.getElementById('modal-header-bar');
+    const modalPageHint = document.getElementById('modal-page-hint');
+    const newTabBtn = document.getElementById('modal-newtab-btn');
+    if (!modal || !modalWin || !modalBody) return;
+
+    const renderToken = ++currentModalRenderToken;
+    const candidates = JSON.parse(candidatesJsonStr);
+
+    lastClickedCardRect = cardEl ? cardEl.getBoundingClientRect() : null;
+
+    modalWin.classList.remove('modal-size-pdf', 'modal-size-pdf-portrait', 'modal-size-video', 'modal-size-image');
+    modalWin.style.width = '';
+    modalBody.innerHTML = '';
+    modalTitle.innerText = title || '作品预览';
+
+    if (type === 'pdf') {
+      modalWin.classList.add('modal-size-pdf');
+      modalHeaderBar.className = 'w-full flex justify-between items-center px-5 py-3.5 border-b border-black/5 bg-white/95 backdrop-blur-md z-20 shrink-0';
+      modalTitle.className = 'text-sm md:text-base font-semibold text-[#1d1a16] tracking-wide';
+      if (modalPageHint) modalPageHint.classList.remove('hidden');
+
+      const validUrl = (cardEl && cardEl.dataset.resolvedPdfUrl)
+        ? cardEl.dataset.resolvedPdfUrl
+        : await findWorkingUrl(candidates);
+
+      newTabBtn.href = validUrl;
+      newTabBtn.classList.remove('hidden');
+
+      const scrollWrap = document.createElement('div');
+      scrollWrap.className = 'pdf-pages-scroll-container';
+      scrollWrap.innerHTML = `<div id="pdf-loading-tip" class="text-sm text-neutral-500 py-12">正在高清加载《${title}》全部页面...</div>`;
+      modalBody.appendChild(scrollWrap);
+
+      animateModalOpen(modal, modalWin);
+
+      if (window.pdfjsLib && window.location.protocol !== 'file:') {
+        try {
+          setupPdfJsWorker();
+          const pdfDoc = await loadPdfDocumentSafely(validUrl);
+          if (renderToken !== currentModalRenderToken) return;
+
+          // 检测第一页宽高比：若是竖版 PDF，自动收窄弹窗宽度匹配单页比例，确保单页 100% 完整呈现在窗口内
+          const firstPage = await pdfDoc.getPage(1);
+          const vp1 = firstPage.getViewport({ scale: 1 });
+          const pageAspect = vp1.width / vp1.height;
+          if (pageAspect < 0.95) {
+            modalWin.classList.add('modal-size-pdf-portrait');
+            const availH = Math.min(window.innerHeight * 0.88, 860) - 54 - 32;
+            const idealW = Math.round(availH * pageAspect + 44);
+            modalWin.style.width = `${Math.max(360, Math.min(window.innerWidth * 0.88, idealW))}px`;
+          }
+
+          const loadingTip = scrollWrap.querySelector('#pdf-loading-tip');
+          if (loadingTip) loadingTip.remove();
+
+          for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+            if (renderToken !== currentModalRenderToken) return;
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.className = 'pdf-page-canvas';
+            scrollWrap.appendChild(pageCanvas);
+            await renderPdfPageToCanvas(pdfDoc, pageNum, pageCanvas, 1000, bleedRatio);
+          }
+          return;
+        } catch (err) {
+          console.warn('PDF.js 渲染回退至原生阅读器:', err);
+        }
+      }
+
+      scrollWrap.innerHTML = `<iframe src="${validUrl}#view=Fit" class="w-full h-full border-0 rounded-xl bg-white"></iframe>`;
+      return;
+
+    } else if (type === 'video') {
+      modalWin.classList.add('modal-size-video');
+      modalHeaderBar.className = 'w-full flex justify-between items-center px-5 py-3 border-b border-white/10 bg-[#18181b] z-20 shrink-0';
+      modalTitle.className = 'text-sm md:text-base font-semibold text-white tracking-wide';
+      if (modalPageHint) modalPageHint.classList.add('hidden');
+      newTabBtn.classList.add('hidden');
+
+      const escapedCandidates = JSON.stringify(candidates).replace(/"/g, '&quot;');
+      let posterAttr = '';
+      if (coverJsonStr) {
+        const covers = JSON.parse(coverJsonStr);
+        if (covers && covers.length) posterAttr = `poster="${covers[0]}"`;
+      }
+
+      modalBody.innerHTML = `
+        <div class="w-full h-full bg-black flex items-center justify-center p-2">
+          <video src="${candidates[0]}" ${posterAttr} controls autoplay playsinline
+                 class="w-full h-full max-h-full object-contain outline-none rounded-lg"
+                 data-candidates="${escapedCandidates}" data-idx="0" data-autoplay-now="1"
+                 onerror="tryNextVideoCandidate(this)"></video>
+        </div>
+      `;
+    } else {
+      modalWin.classList.add('modal-size-image');
+      modalHeaderBar.className = 'w-full flex justify-between items-center px-5 py-3.5 border-b border-black/5 bg-white/95 backdrop-blur-md z-20 shrink-0';
+      modalTitle.className = 'text-sm md:text-base font-semibold text-[#1d1a16] tracking-wide';
+      if (modalPageHint) modalPageHint.classList.add('hidden');
+
+      const currentImgEl = cardEl ? cardEl.querySelector('img.card-main-img') : null;
+      const activeSrc = (currentImgEl && currentImgEl.src) ? currentImgEl.src : candidates[0];
+      newTabBtn.href = activeSrc;
+      newTabBtn.classList.remove('hidden');
+
+      const escapedCandidates = JSON.stringify(candidates).replace(/"/g, '&quot;');
+      modalBody.innerHTML = `
+        <div class="w-full h-full p-4 md:p-6 bg-[#f2f0eb] flex items-center justify-center overflow-auto">
+          <img src="${activeSrc}" alt="${title}"
+               class="max-w-full max-h-full object-contain rounded-xl shadow-sm select-none"
+               data-candidates="${escapedCandidates}" data-idx="0"
+               onerror="tryNextImageCandidate(this)">
+        </div>
+      `;
+    }
+
+    animateModalOpen(modal, modalWin);
+  }
+
+  function animateModalOpen(modal, modalWin) {
+    modal.classList.add('active');
+    syncFollowerBallColor();
+    let startX = 0;
+    let startY = 35;
+    let startScale = 0.72;
+    if (lastClickedCardRect) {
+      const cardCenterX = lastClickedCardRect.left + lastClickedCardRect.width / 2;
+      const cardCenterY = lastClickedCardRect.top + lastClickedCardRect.height / 2;
+      startX = (cardCenterX - window.innerWidth / 2) * 0.45;
+      startY = (cardCenterY - window.innerHeight / 2) * 0.45;
+      startScale = 0.58;
+    }
+
+    gsap.killTweensOf([modal, modalWin]);
+    gsap.fromTo(modal,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.36, ease: 'power2.out' }
+    );
+    gsap.fromTo(modalWin,
+      { x: startX, y: startY, scale: startScale, opacity: 0 },
+      { x: 0, y: 0, scale: 1, opacity: 1, duration: 0.50, ease: 'expo.out' }
+    );
+  }
+
+  function closeMediaModal() {
+    const modal = document.getElementById('media-modal');
+    const modalWin = document.getElementById('modal-window');
+    const modalBody = document.getElementById('modal-body');
+    if (!modal || !modal.classList.contains('active')) return;
+
+    currentModalRenderToken++;
+    const activeVideo = modalBody ? modalBody.querySelector('video') : null;
+    if (activeVideo) activeVideo.pause();
+
+    let endX = 0;
+    let endY = 24;
+    if (lastClickedCardRect) {
+      const cardCenterX = lastClickedCardRect.left + lastClickedCardRect.width / 2;
+      const cardCenterY = lastClickedCardRect.top + lastClickedCardRect.height / 2;
+      endX = (cardCenterX - window.innerWidth / 2) * 0.35;
+      endY = (cardCenterY - window.innerHeight / 2) * 0.35;
+    }
+
+    gsap.killTweensOf([modal, modalWin]);
+    gsap.to(modalWin, {
+      x: endX,
+      y: endY,
+      scale: 0.72,
+      opacity: 0,
+      duration: 0.30,
+      ease: 'power3.inOut'
+    });
+    gsap.to(modal, {
+      opacity: 0,
+      duration: 0.28,
+      ease: 'power2.inOut',
+      onComplete: () => {
+        modal.classList.remove('active');
+        isHoveringDarkElement = false;
+        syncFollowerBallColor();
+        if (modalBody) modalBody.innerHTML = '';
+      }
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMediaModal();
+  });
+
+  // 实时北京时间时钟
+  function updateClock() {
+    const now = new Date();
+    const options = { timeZone: 'Asia/Shanghai', hour: 'numeric', minute: '2-digit', hour12: true };
+    const timeStr = now.toLocaleTimeString('en-US', options) + ' BJT';
+    const el1 = document.getElementById('real-time-clock');
+    const el2 = document.getElementById('works-clock');
+    if (el1) el1.innerText = timeStr;
+    if (el2) el2.innerText = timeStr;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // 点击顶部导航栏居中 Logo 或结尾页 Back to Home 平滑回到整个页面首页
+  const headerHomeBtn = document.getElementById('header-home-btn');
+  if (headerHomeBtn) {
+    headerHomeBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+  const endingHomeBtn = document.getElementById('ending-home-btn');
+  if (endingHomeBtn) {
+    endingHomeBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  const animState = {
+    morph: 0,
+    scale: 0.8,
+    x: 0,
+    y: 0,
+    rotate: 0,
+    colorOpacity: 0
+  };
+
+  function updateCutout() {
+    let pathD;
+    if (animState.morph <= 0.001) {
+      pathD = logoFullD;
+    } else if (animState.morph >= 0.999) {
+      pathD = roundedRectPathD;
+    } else {
+      let m = Math.max(0, Math.min(1, animState.morph));
+      pathD = interpolator(m);
+    }
+    pathElement.setAttribute('d', pathD);
+    coloredPathElement.setAttribute('d', pathD);
+    coloredPathElement.setAttribute('opacity', animState.colorOpacity);
+
+    const transformStr = `translate(${animState.x}, ${animState.y}) scale(${animState.scale}) rotate(${animState.rotate})`;
+    animGroup.setAttribute('transform', transformStr);
+    coloredAnimGroup.setAttribute('transform', transformStr);
+  }
+
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  let startTime = null;
+  const introDuration = 2800;
+
+  // 1. 开场入场动画
+  function animateIntro(timestamp) {
+    if (!startTime) startTime = timestamp;
+    let elapsed = timestamp - startTime;
+    let t = Math.min(elapsed / introDuration, 1);
+
+    isPageOnHeroVideo = (t > 0.55);
+    syncFollowerBallColor();
+
+    if (t <= 0.25) {
+      let p = t / 0.25;
+      let easedP = easeOutCubic(p);
+      animState.morph = 0;
+      animState.scale = 0.8 + easedP * 1.6;
+      animState.x = 0;
+      animState.rotate = 0;
+      animState.colorOpacity = 0;
+      updateCutout();
+    } else if (t <= 0.55) {
+      let p = (t - 0.25) / 0.3;
+      let easedP = easeInOutCubic(p);
+      animState.morph = easedP;
+      animState.scale = 2.4;
+      animState.x = 0;
+      animState.rotate = 0;
+      animState.colorOpacity = 0;
+      updateCutout();
+    } else {
+      let p = (t - 0.55) / 0.45;
+      let easedP = easeInOutCubic(p);
+      animState.morph = 1;
+      animState.scale = 2.4 + easedP * (38 - 2.4);
+      animState.x = 0;
+      animState.rotate = 0;
+      animState.colorOpacity = 0;
+      updateCutout();
+
+      if (t > 0.75 && mainContent.style.opacity !== '1') {
+        mainContent.style.opacity = '1';
+        const textElements = document.querySelectorAll('.animate-text');
+        textElements.forEach(el => {
+          const delay = parseInt(el.getAttribute('data-delay')) || 0;
+          setTimeout(() => { el.classList.add('active'); }, delay);
+        });
+      }
+    }
+
+    if (t < 1) {
+      requestAnimationFrame(animateIntro);
+    } else {
+      animState.morph = 1;
+      animState.scale = 38;
+      animState.x = 0;
+      animState.rotate = 0;
+      animState.colorOpacity = 0;
+      updateCutout();
+
+      document.body.style.overflow = 'auto';
+      initScrollTriggers();
+    }
+  }
+
+  // 导航栏布局模式切换（directory: 作品目录 | showcase: 作品展示）
+  let currentHeaderMode = 'directory';
+  function updateHeaderLayout(mode) {
+    if (mode) currentHeaderMode = mode;
+    const cardsEl = document.getElementById('cards-conveyor-group');
+    const headerInner = document.getElementById('works-header-inner');
+    const toptextEl = document.getElementById('works-header-toptext');
+    const subtextEl = document.getElementById('works-header-subtext');
+    if (!headerInner) return;
+
+    if (window.innerWidth <= 768) {
+      if (toptextEl && toptextEl.innerText !== '{个人') toptextEl.innerText = '{个人';
+      if (subtextEl && subtextEl.innerText !== '作品集}') subtextEl.innerText = '作品集}';
+      headerInner.style.width = '100%';
+      headerInner.style.maxWidth = '100%';
+      headerInner.style.paddingLeft = '4vw';
+      headerInner.style.paddingRight = '4vw';
+      return;
+    } else {
+      if (toptextEl && toptextEl.innerText !== '{作品') toptextEl.innerText = '{作品';
+    }
+
+    if (currentHeaderMode === 'showcase') {
+      if (subtextEl && subtextEl.innerText !== '展示}') {
+        subtextEl.innerText = '展示}';
+      }
+      headerInner.style.width = '100%';
+      headerInner.style.maxWidth = '100%';
+      headerInner.style.paddingLeft = '2.3vw';
+      headerInner.style.paddingRight = '1.5vw';
+    } else {
+      if (subtextEl && subtextEl.innerText !== '目录}') {
+        subtextEl.innerText = '目录}';
+      }
+      if (cardsEl && cardsEl.offsetWidth > 0) {
+        headerInner.style.width = cardsEl.offsetWidth + 'px';
+        headerInner.style.maxWidth = cardsEl.offsetWidth + 'px';
+        headerInner.style.paddingLeft = '0px';
+        headerInner.style.paddingRight = '0px';
+      }
+    }
+  }
+
+  // 导航栏颜色主题切换
+  let currentHeaderTheme = 'blue';
+  function setHeaderTheme(theme) {
+    if (currentHeaderTheme === theme) return;
+    currentHeaderTheme = theme;
+    const headerContainer = document.getElementById('works-header-container');
+    if (!headerContainer) return;
+    headerContainer.style.color = (theme === 'dark') ? '#1d1a16' : '#097af4';
+  }
+
+  let lastViewportWidth = window.innerWidth;
+  window.addEventListener('resize', () => {
+    updateHeaderLayout();
+    updateEcommerceSection();
+    updateGalleryScroll();
+    if (window.innerWidth !== lastViewportWidth || window.innerWidth > 768) {
+      lastViewportWidth = window.innerWidth;
+      if (window.ScrollTrigger) ScrollTrigger.refresh();
+    }
+  });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      updateHeaderLayout();
+      updateGalleryScroll();
+    });
+  }
+
+  const phoneLongImg = document.getElementById('phone-long-img');
+  if (phoneLongImg) {
+    phoneLongImg.addEventListener('load', () => {
+      if (window.ScrollTrigger) ScrollTrigger.refresh();
+    });
+  }
+
+  window.addEventListener('load', () => {
+    window.scrollTo(0, 0);
+    requestAnimationFrame(animateIntro);
+    setTimeout(() => updateHeaderLayout('directory'), 300);
+    setTimeout(() => {
+      const pendingCards = document.querySelectorAll('.bento-card[data-pdf-candidates] .pdf-cover-canvas.hidden');
+      if (pendingCards.length > 0) initPdfCardCovers();
+    }, 800);
+  });
+
+  // 顶栏显隐状态管理
+  let headerVisibleState = false;
+  function setHeaderVisible(visible) {
+    if (headerVisibleState === visible) return;
+    headerVisibleState = visible;
+    const headerEl = document.getElementById('works-header-container');
+    if (!headerEl) return;
+    gsap.to(headerEl, {
+      y: visible ? 0 : -50,
+      opacity: visible ? 1 : 0,
+      pointerEvents: visible ? 'auto' : 'none',
+      duration: 0.35,
+      ease: 'power2.out',
+      overwrite: 'auto'
+    });
+  }
+
+  // 2. 核心滚动时间线
+  function initScrollTriggers() {
+    gsap.registerPlugin(ScrollTrigger);
+
+    gsap.set("#conveyor-track", {
+      visibility: "hidden",
+      opacity: 0,
+      x: () => window.innerWidth * 0.6,
+      y: 0
+    });
+    gsap.set("#cards-conveyor-group", { opacity: 0 });
+    gsap.set("#works-header-container", { y: -50, opacity: 0, pointerEvents: "none" });
+
+    gsap.set("#ecommerce-section", { visibility: "hidden", opacity: 0 });
+    ecomState.progress = 0;
+    updateEcommerceSection();
+    gsap.set("#phone-long-img", { y: 0 });
+
+    gsap.set("#brand-section", { visibility: "hidden", y: () => window.innerHeight });
+
+    gsap.set("#brand-gallery-section", { visibility: "hidden" });
+    gsap.set("#ending-section", { visibility: "hidden" });
+    galleryScrollState.progress = 0;
+    updateGalleryScroll();
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: ".scroll-track",
+        start: "top top",
+        end: "bottom bottom",
+        scrub: 0.45,
+        invalidateOnRefresh: true,
+        onRefreshInit: () => {
+          animState.morph = 1;
+          animState.scale = 38;
+          animState.x = 0;
+          animState.y = 0;
+          animState.rotate = 0;
+          animState.colorOpacity = 0;
+          updateCutout();
+          updateHeaderLayout();
+        },
+        onRefresh: () => {
+          updateCutout();
+          updateEcommerceSection();
+          updateGalleryScroll();
+        },
+        onUpdate: (self) => {
+          const currentTime = tl.time();
+
+          isPageOnHeroVideo = (currentTime < 1.1);
+          syncFollowerBallColor();
+
+          const videoContainer = document.getElementById('video-container');
+          if (videoContainer) {
+            if (currentTime >= 1.8) {
+              videoContainer.style.visibility = 'hidden';
+              videoContainer.style.opacity = '0';
+            } else {
+              videoContainer.style.visibility = 'visible';
+              videoContainer.style.opacity = '1';
+            }
+          }
+
+          const ecomSection = document.getElementById('ecommerce-section');
+          if (ecomSection) {
+            if (currentTime >= 6.8 && currentTime <= 15.8) {
+              ecomSection.style.visibility = 'visible';
+              ecomSection.style.opacity = '1';
+              updateEcommerceSection();
+            } else {
+              ecomSection.style.visibility = 'hidden';
+              ecomSection.style.opacity = '0';
+            }
+          }
+
+          const brandSection = document.getElementById('brand-section');
+          if (brandSection) {
+            brandSection.style.visibility = (currentTime >= 13.85 && currentTime <= 24.5) ? 'visible' : 'hidden';
+          }
+
+          const gallerySection = document.getElementById('brand-gallery-section');
+          if (gallerySection) {
+            if (currentTime >= 16.05) {
+              gallerySection.style.visibility = 'visible';
+              updateGalleryScroll();
+            } else {
+              gallerySection.style.visibility = 'hidden';
+              const endingSection = document.getElementById('ending-section');
+              if (endingSection) endingSection.style.visibility = 'hidden';
+            }
+          }
+
+          if (currentTime <= 3.5) {
+            updateCutout();
+          }
+
+          if (currentTime >= 14.5) {
+            setHeaderTheme('dark');
+          } else {
+            setHeaderTheme('blue');
+          }
+
+          const endingSectionEl = document.getElementById('ending-section');
+          const isEndingVisible = endingSectionEl && endingSectionEl.style.visibility === 'visible';
+
+          if (currentTime < 5.0 || isEndingVisible) {
+            setHeaderVisible(false);
+          } else if (currentTime >= 5.0 && currentTime <= 6.1) {
+            updateHeaderLayout('directory');
+            setHeaderVisible(true);
+          } else {
+            updateHeaderLayout('showcase');
+            if (self.direction === 1) {
+              setHeaderVisible(false);
+            } else if (self.direction === -1) {
+              setHeaderVisible(true);
+            }
+          }
+        }
+      }
+    });
+
+    tl.fromTo(mainContent,
+        { opacity: 1 },
+        { opacity: 0, duration: 0.4, immediateRender: false },
+        0
+      )
+      .fromTo(animState,
+        { scale: 38 },
+        {
+          scale: 2.4,
+          duration: 1.0,
+          ease: "power2.inOut",
+          immediateRender: false,
+          onUpdate: updateCutout
+        },
+        0.2
+      )
+      .fromTo(animState,
+        { morph: 1, colorOpacity: 0 },
+        {
+          morph: 0,
+          colorOpacity: 1,
+          duration: 0.7,
+          ease: "power2.inOut",
+          immediateRender: false,
+          onUpdate: updateCutout
+        },
+        1.1
+      )
+      .fromTo("#video-overlay-layer",
+        { opacity: 1 },
+        { opacity: 0, duration: 0.5, immediateRender: false },
+        1.1
+      )
+      .set("#conveyor-track", { visibility: "visible", opacity: 1 }, 1.8)
+      .fromTo("#conveyor-track",
+        { x: () => window.innerWidth * 0.6 },
+        {
+          x: () => window.innerWidth * 0.08,
+          duration: 0.5,
+          ease: "power2.out",
+          immediateRender: false
+        },
+        1.8
+      )
+      .fromTo(animState,
+        { x: 0, rotate: 0 },
+        {
+          x: -1600,
+          rotate: -14,
+          duration: 0.9,
+          ease: "power2.inOut",
+          immediateRender: false,
+          onUpdate: updateCutout
+        },
+        2.3
+      )
+      .to("#conveyor-track", {
+        x: () => -window.innerWidth * 0.45,
+        duration: 0.9,
+        ease: "power2.inOut"
+      }, 2.3)
+      .to("#conveyor-track", {
+        x: () => {
+          updateHeaderLayout(currentHeaderMode);
+          const cardsEl = document.getElementById('cards-conveyor-group');
+          const sloganEl = document.getElementById('slogan-box');
+          const cardsWidth = cardsEl ? cardsEl.getBoundingClientRect().width : 1000;
+          const sloganWidth = sloganEl ? sloganEl.getBoundingClientRect().width : 1100;
+          return -(sloganWidth + cardsWidth / 2);
+        },
+        duration: 1.4,
+        ease: "power1.inOut"
+      }, 3.2)
+      .fromTo("#cards-conveyor-group",
+        { opacity: 0 },
+        { opacity: 1, duration: 1.0, ease: "power1.out", immediateRender: false },
+        3.3
+      )
+      .fromTo("#slogan-box",
+        { opacity: 1 },
+        { opacity: 0, duration: 0.8, ease: "power1.in", immediateRender: false },
+        3.6
+      )
+      .to({}, { duration: 1.3 }, 4.8)
+      .fromTo("#conveyor-track",
+        { y: 0, opacity: 1 },
+        {
+          y: () => -window.innerHeight * 1.05,
+          opacity: 0,
+          duration: 1.0,
+          ease: "power2.inOut",
+          immediateRender: false
+        },
+        6.1
+      )
+      .fromTo(ecomState,
+        { progress: 0 },
+        {
+          progress: 1,
+          duration: 1.5,
+          ease: "none",
+          immediateRender: false,
+          onUpdate: updateEcommerceSection
+        },
+        6.8
+      )
+      .to({}, { duration: 0.4 }, 8.3)
+      .fromTo("#phone-long-img",
+        { y: 0 },
+        {
+          y: () => {
+            const img = document.getElementById('phone-long-img');
+            const mask = document.getElementById('phone-screen-mask');
+            if (!img || !mask) return -1800;
+            return -Math.max(0, img.offsetHeight - mask.offsetHeight);
+          },
+          duration: 4.8,
+          ease: "none",
+          immediateRender: false
+        },
+        8.7
+      )
+      .to({}, { duration: 0.4 }, 13.5)
+      .fromTo("#brand-section",
+        { y: () => window.innerHeight },
+        {
+          y: 0,
+          duration: 1.5,
+          ease: "power2.inOut",
+          immediateRender: false
+        },
+        13.9
+      )
+      .to({}, { duration: 0.7 }, 15.4)
+      .fromTo(galleryScrollState,
+        { progress: 0 },
+        {
+          progress: 1,
+          duration: 11.9,
+          ease: "none",
+          immediateRender: false,
+          onUpdate: updateGalleryScroll
+        },
+        16.1
+      );
+
+    updateHeaderLayout('directory');
+    ScrollTrigger.refresh();
+  }
+</script>
+</body>
+</html>
